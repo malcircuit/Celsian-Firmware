@@ -5,7 +5,7 @@ MAKEFILE_NAME := $(MAKEFILE_LIST)
 MAKEFILE_DIR := $(dir $(MAKEFILE_NAME) ) 
 
 NRF_SDK_ROOT := /Users/matt/NRF52/nRF5_SDK_11.0.0_89a8197
-PROJECT_ROOT := /Users/matt/Documents/workspace/celsian_r2
+PROJECT_ROOT := /Users/matt/git/Celsian-Firmware
 
 TEMPLATE_PATH = $(NRF_SDK_ROOT)/components/toolchain/gcc
 ifeq ($(OS),Windows_NT)
