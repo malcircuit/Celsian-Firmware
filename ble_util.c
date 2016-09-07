@@ -76,7 +76,7 @@ static ble_gatts_char_pf_t celsian_uv_format =
 		.desc = BLE_GATT_CPF_NAMESPACE_DESCRIPTION_UNKNOWN	// No description for this format
 };
 
-static ble_idle_callback_t on_idle;
+static ble_callbacks_t *callbacks;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -321,17 +321,6 @@ static void conn_params_init(void)
 //}
 
 
-/**@brief Function for putting the chip into sleep mode.
- *
- * @note This function will not return.
- */
-static void sleep_mode_enter(void)
-{
-	// Go to system-off mode (this function will not return; wakeup will cause a reset).
-    ret_code_t err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
-}
-
 /**@brief Function for handling advertising events.
  *
  * @details This function will be called for advertising events which are passed to the application.
@@ -343,10 +332,10 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
+        	callbacks->on_adv_start();
             break;
         case BLE_ADV_EVT_IDLE:
-        	on_idle();
-            sleep_mode_enter();
+        	callbacks->on_adv_idle();
             break;
         default:
             break;
@@ -364,10 +353,12 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 	{
 	case BLE_GAP_EVT_CONNECTED:
 		m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+		callbacks->on_connect();
 		break;
 
 	case BLE_GAP_EVT_DISCONNECTED:
 		m_conn_handle = BLE_CONN_HANDLE_INVALID;
+		callbacks->on_disconnect();
 		break;
 
 	default:
@@ -471,7 +462,7 @@ static void advertising_init(void)
 }
 
 
-void ble_init(ble_idle_callback_t on_idle_callback, ble_char_value_handles_t values)
+void ble_init(ble_callbacks_t *event_callbacks, ble_char_value_handles_t values)
 {
 	mpl_temp = values.p_mpl_temp;
 	sht_temp = values.p_sht_temp;
@@ -489,7 +480,12 @@ void ble_init(ble_idle_callback_t on_idle_callback, ble_char_value_handles_t val
 	advertising_init();
 	conn_params_init();
 
-	on_idle = on_idle_callback;
+	callbacks = event_callbacks;
+}
+
+void ble_start_adv()
+{
+	APP_ERROR_CHECK(ble_advertising_start(BLE_ADV_MODE_FAST));
 }
 
 void ble_disconnect()

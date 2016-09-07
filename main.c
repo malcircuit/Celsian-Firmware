@@ -10,12 +10,8 @@
  *
  */
 
-/** @file
+/**
  *
- * @defgroup blinky_example_main main.c
- * @{
- * @ingroup blinky_example
- * @brief Blinky Example Application main file.
  *
  * The NFCPINS.PROTECT bit in the UICR register must be set to 0 to
  * allow the MISO line to be read correctly.
@@ -30,11 +26,10 @@
 #include "ble_util.h"
 #include <nrf_delay.h>
 
-#define WAKE_FROM_GPIO_EVENT 0x00010000
+#define WAKE_FROM_GPIO_EVENT 	0x00010000
+#define CLEAR_RESETREAS 		0xFFFFFFFF
 
-volatile bool pulse_detected = false;
-volatile bool is_adv = false;
-bool is_ble_init = false;
+volatile bool pulse_detected = false, is_adv = false, is_connected = false;
 
 void check_for_wake_from_gpio();
 void init_interrupts();
@@ -51,6 +46,28 @@ void on_ble_idle()
 	sensors_low_power();
 
 	debug_printf("BLE is idle, shutting down\n");
+    APP_ERROR_CHECK(sd_power_system_off());
+}
+
+void on_ble_adv_start()
+{
+	is_adv = true;
+	debug_printf("BLE advertising started\n");
+}
+
+void on_ble_connect()
+{
+	is_adv = false;
+	is_connected = true;
+	led_set(G_LED);
+	debug_printf("BLE connected\n");
+}
+
+void on_ble_disconnect()
+{
+	is_connected = false;
+	ble_start_adv();
+	debug_printf("BLE disconnected\n");
 }
 
 /**
@@ -60,6 +77,7 @@ int main(void)
 {
 	double sht20_temp = 0, rh = 0, pressure = 0, mpl_temp = 0, uv_index;
 	uint16_t uva = 0, uvb = 0, uvd = 0, uvcomp1 = 0, uvcomp2 = 0;
+
 	ble_char_value_handles_t values = {
 			.p_sht_temp 	= (uint8_t *)&sht20_temp,
 			.p_mpl_temp 	= (uint8_t *)&mpl_temp,
@@ -72,9 +90,14 @@ int main(void)
 			.p_uvcomp2 		= (uint8_t *)&uvcomp2,
 	};
 
-	ble_init(on_ble_idle, values);
-	is_ble_init = true;
+	ble_callbacks_t callbacks = {
+			.on_adv_idle = on_ble_idle,
+			.on_adv_start = on_ble_adv_start,
+			.on_connect = on_ble_connect,
+			.on_disconnect = on_ble_disconnect
+	};
 
+	ble_init(&callbacks, values);
 	debug_init();
 	sensors_init();
 	flash_init();
@@ -92,27 +115,35 @@ int main(void)
 
 	while (true)
 	{
-		if (pulse_detected)
+		if (pulse_detected && !is_adv && !is_connected)
 		{
 			debug_printf("Pulse Detected\n");
-			APP_ERROR_CHECK(ble_advertising_start(BLE_ADV_MODE_FAST));
-			led_set(G_LED);
+			is_adv = true;
+			ble_start_adv();
 			pulse_detected = false;
 		}
 
-		sht20_temp = sht20_get_temp();
-		rh = sht20_get_rh();
-		debug_printf("SHT T: %d F\t RH: %d %%\n",(int)(sht20_temp*1.8 + 32), (int)rh);
+		if (is_adv)
+		{
+			led_toggle(G_LED);
 
-		mpl_oneshot_block(&pressure, &mpl_temp);
-		mpl_temp = mpl_temp*1.8 + 32;
-		pressure = pressure / 100;
-		debug_printf("MPL T: %d F\t P: %d mb\n", (int)mpl_temp, (int)pressure);
+			nrf_delay_ms(500);
+		}
 
-		uv_index = veml_get_uv_index(&uva, &uvb, &uvd, &uvcomp1, &uvcomp2);
-		debug_printf("UVI: %d\n", (int)uv_index);
+		if (is_connected)
+		{
+			sht20_temp = sht20_get_temp();
+			rh = sht20_get_rh();
+			debug_printf("SHT T: %d F\t RH: %d %%\n",(int)(sht20_temp*1.8 + 32), (int)rh);
 
-		nrf_delay_ms(500);
+			mpl_oneshot_block(&pressure, &mpl_temp);
+			debug_printf("MPL T: %d F\t P: %d mb\n", (int)(mpl_temp*1.8 +32), (int)(pressure/100));
+
+			uv_index = veml_get_uv_index(&uva, &uvb, &uvd, &uvcomp1, &uvcomp2);
+			debug_printf("UVI: %d\n", (int)uv_index);
+
+			nrf_delay_ms(500);
+		}
 	}
 }
 
@@ -130,6 +161,11 @@ void check_for_wake_from_gpio()
 	else if (reset_reason == 0)												// Power-on-Reset
 	{
 		pulse_detected = true;
+	}
+	else
+	{
+		APP_ERROR_CHECK(sd_power_reset_reason_clr(CLEAR_RESETREAS));
+	    APP_ERROR_CHECK(sd_power_system_off());
 	}
 }
 
@@ -150,4 +186,5 @@ void init_interrupts()
 	APP_ERROR_CHECK(nrf_drv_gpiote_in_init(MOTION_INT1_PIN, &motion_int_cfg, on_pulse));
 	nrf_drv_gpiote_in_event_enable(MOTION_INT1_PIN, true);
 }
+
 /** @} */

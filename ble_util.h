@@ -108,9 +108,18 @@ typedef struct
 
 } ble_char_value_handles_t;
 
-typedef void (*ble_idle_callback_t)();
+typedef void (*ble_callback_t)();
 
-void ble_init(ble_idle_callback_t on_idle_callback, ble_char_value_handles_t values);
+typedef struct
+{
+	ble_callback_t on_adv_idle;
+	ble_callback_t on_adv_start;
+	ble_callback_t on_connect;
+	ble_callback_t on_disconnect;
+} ble_callbacks_t;
+
+void ble_init(ble_callbacks_t *event_callbacks, ble_char_value_handles_t values);
+void ble_start_adv();
 void ble_disconnect();
 
 #endif /* BLE_UTIL_H_ */

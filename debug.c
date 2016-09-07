@@ -7,6 +7,7 @@
 
 #include "debug.h"
 
+#ifdef CELSIAN_DEBUG
 static app_uart_comm_params_t const comm_params =
 {
 		UART0_CONFIG_PSEL_RXD,
@@ -34,28 +35,23 @@ static void uart_event_handler(app_uart_evt_t * p_event)
             break;
     }
 }
+#endif
 
 void debug_init()
 {
+#ifdef CELSIAN_DEBUG
 	ret_code_t err_code = 0;
 	APP_UART_INIT(&comm_params,
 			uart_event_handler,
 			UART0_CONFIG_IRQ_PRIORITY,
 			err_code);
 	APP_ERROR_CHECK(err_code);
-}
-
-static void uart_send(char *data, uint8_t length)
-{
-    uint8_t i = 0;
-	do{
-		while(app_uart_put(data[i]) != NRF_SUCCESS);
-		i++;
-	}while(i < length && data[i] != 0);
+#endif
 }
 
 void debug_printf(const char *template, ...)
 {
+#ifdef CELSIAN_DEBUG
 	va_list va_lst;
 	va_start(va_lst, template);
 	char buffer[UART_BUFFER_SIZE] = {0};
@@ -63,5 +59,12 @@ void debug_printf(const char *template, ...)
 
 	char_num = vsnprintf(buffer, UART_BUFFER_SIZE, template, va_lst);
 	va_end(va_lst);
-	uart_send(buffer, char_num);
+	uint8_t i = 0;
+	do
+	{
+		while(app_uart_put(buffer[i]) != NRF_SUCCESS);
+		i++;
+	}
+	while(i < char_num && buffer[i] != 0);
+#endif
 }
